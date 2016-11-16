@@ -157,10 +157,7 @@ namespace ConsoleApplication1
 				samples = null;
 			}
 
-			internal uint getLength()
-			{
-				return (uint)sChunkID.Length + (uint)samples.Length;
-			}
+			internal uint getLength() => (uint)sChunkID.Length + (uint)samples.Length;
 
 			public wavData(wavData copy)
 			{
@@ -175,10 +172,7 @@ namespace ConsoleApplication1
 				uint dwChunkSize = (uint)samples.Length;
 				writer.Write(sChunkID.ToCharArray());
 				writer.Write(dwChunkSize);
-				foreach(byte s in samples)
-				{
-					writer.Write(s);
-				}
+				writer.Write(samples);
 			}
 
 			public static wavData Read(BinaryReader reader)
@@ -211,10 +205,7 @@ namespace ConsoleApplication1
 			private byte[] createTempCopy(int extraSize)
 			{
 				byte[] temp = new byte[samples.Length + extraSize];
-				for(int k = 0; k < samples.Length; k++)
-				{
-					temp[k] = samples[k];
-				}
+				Array.Copy(samples, temp, samples.Length);
 				return temp;
 			}
 			
@@ -232,9 +223,6 @@ namespace ConsoleApplication1
 			public void CatSilence(int len)
 			{
 				byte[] temp = createTempCopy(len);
-				for(int k = 0; k < len; k++)
-					temp[k + samples.Length] = 0;
-
 				assignTempCopy(temp);
 			}
 
@@ -256,21 +244,29 @@ namespace ConsoleApplication1
 
 		public int Duration => data?.samples.Length ?? 0;
 		public int OrigDuration { get; private set; }
+		public string FileName { get; set; }
+		public string Name { get; set; }
 
-		public bool PCM => format != null ? format.wFormatTag == 1 && format.dwChunkSize==16: false;
 
 		public Wav()
 		{
 			clear();
 		}
 
+		public Wav(Wav copy)
+		{
+			header = new wavHeader(copy.header);
+			format = new wavFormat(copy.format);
+			data = new wavData(copy.data);
+			OrigDuration = copy.OrigDuration;
+			FileName = copy.FileName;
+			Name = copy.Name;
+		}
+
 		public Wav(string filename)
 		{
 			Load(filename);
 		}
-
-		public string FileName { get; set; }
-		public string Name { get; set; }
 
 		private void clear()
 		{

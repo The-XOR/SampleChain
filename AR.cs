@@ -1,72 +1,70 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace ConsoleApplication1
 {
 	public static class AR
 	{
-		public static void Save(string newName, WaveScanner ws)
+		public static void Save(string newName, WaveScanner ws, int overhead, bool createLogs)
 		{
-			Wav total = new Wav();
-			foreach(Wav wf in ws.Samples)
+			List<splitter> chains = ARSplitter.GetChains(ws.NumFiles, overhead);
+			int chain_n = 1;
+			foreach(splitter chain in chains )
 			{
-				total.Cat(wf);
+				WavCollection samples = ws.GetSamples(chain);
+				Wav total = samples.GetChain();
+
+				for(int k = 0; k < chain.fillers; k++)
+					total.CatSilence(samples.MaxDuration());
+
+				int tot = chain.chainLen + chain.fillers;
+				string wavName, logName;
+				mkNames(newName, tot, chain_n, out wavName, out logName);
+
+				total.Save(wavName);
+				if(createLogs)
+					saveLog(logName, chain.fillers, samples);
+				chain_n++;
 			}
-
-			// # of samplechain is always EVEN
-			int remainder = 0;
-			while((120 % (ws.Samples.Count + remainder) != 0))
-				remainder++;
-
-			for(int k = 0; k < remainder; k++)
-				total.CatSilence(ws.MaxDuration());
-
-			int tot = ws.Samples.Count + remainder;
-			string wavName, logName;
-			mkNames(newName, tot, out wavName, out logName);
-
-			total.Save(wavName);
-			saveLog(logName, remainder, ws);
 		}
 
-		private static void mkNames(string name, int slices, out string wavName, out string logName)
+		private static void mkNames(string name, int slices, int chain_n, out string wavName, out string logName)
 		{
 			string dir = Path.GetDirectoryName(name);
-			string n = $"#{slices}({120 / slices})_{Path.GetFileName(name)}";
+			string n = $"#{slices}({120 / slices})_{Path.GetFileName(name)}_C{chain_n}";
 			wavName = Path.Combine(dir, n);
 			logName = Path.ChangeExtension(wavName, ".txt");
+			wavName = Path.ChangeExtension(wavName, ".wav");
 		}
 
-		private static void saveLog(string name, int remainder, WaveScanner ws)
+		private static void saveLog(string name, int remainder, WavCollection samples)
 		{
-			int tot = ws.Samples.Count + remainder;
+			int tot = samples.NumSamples + remainder;
 			StringBuilder sb = new StringBuilder();
-			sb.AppendFormat("{0} samples in chain", ws.Samples.Count);
+			sb.AppendFormat("{0} samples in chain", samples.NumSamples);
 			if(remainder > 0)
 				sb.AppendFormat(" +{0} fillers ({1} total)", remainder, tot);
 			sb.AppendLine();
 
 			int dur;
-			string longest = ws.GetLongestSample(out dur);
+			string longest = samples.GetLongestSample(out dur);
 			sb.AppendFormat("Slice length: {0} (sample name: {1})", dur, longest);
 			sb.AppendLine();
 
-			if(tot <= 120)
-				append(sb, 120 / tot, remainder, ws);
-			else
-				sb.AppendLine("Too many samples for Analog RYTM chain (max is 120 samples)");
+			append(sb, 120 / tot, remainder, samples);
 
 			File.WriteAllText(name, sb.ToString());
 		}
 
-		private static void append(StringBuilder sb, int increment, int remainder, WaveScanner ws)
+		private static void append(StringBuilder sb, int increment, int remainder, WavCollection samples )
 		{
 			sb.AppendLine();
 			sb.AppendLine("-------------------------- ANALOG RYTM --------------------------");
 			int n = 0;
-			foreach(Wav wf in ws.Samples)
+			for(int k = 0; k < samples.NumSamples; k++)
 			{
-				sb.AppendFormat("STA = {0,3} END = {1,3} => {2} ", n, n + increment, wf.Name);
+				sb.AppendFormat("STA = {0,3} END = {1,3} => {2} ", n, n + increment, samples.GetName(k));
 				n += increment;
 				sb.AppendLine();
 			}
@@ -79,5 +77,6 @@ namespace ConsoleApplication1
 
 			sb.AppendLine();
 		}
+
 	}
 }

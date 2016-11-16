@@ -5,11 +5,23 @@ using System.Linq;
 
 namespace ConsoleApplication1
 {
+	public class splitter
+	{
+		public int chainLen;
+		public int fillers;
+		public int chainOffset;
+		public splitter(int a, int b = 0)
+		{
+			chainLen = a - b;
+			fillers = b;
+			chainOffset = 0;
+		}
+	}
+
 	public class WaveScanner
 	{		
 		private readonly List<Wav> waveList;
 		public int NumFiles => waveList.Count;
-		public List<Wav> Samples => waveList;
 
 		public WaveScanner()
 		{
@@ -20,7 +32,7 @@ namespace ConsoleApplication1
 		{
 			foreach(Wav wf in waveList)
 			{
-				Console.WriteLine("File {0}: S/R={1} Channels={2} Depth={3} PCM={4}", wf.Name, wf.SR, wf.NumChannels, wf.Depth, wf.PCM ? "Y" : "N");
+				Console.WriteLine("File {0}: S/R={1} Channels={2} Depth={3}", wf.Name, wf.SR, wf.NumChannels, wf.Depth);
 			}			
 		}
 
@@ -57,7 +69,7 @@ namespace ConsoleApplication1
 			int sr = 0,
 				numchannels = 0,
 				depth = 0;
-			bool pcm = false;
+			
 			foreach(Wav wf in waveList)
 			{
 				if(sr == 0)
@@ -65,13 +77,11 @@ namespace ConsoleApplication1
 					numchannels = wf.NumChannels;
 					sr= wf.SR;
 					depth=wf.Depth;
-					pcm = wf.PCM;
 				}  else
 				{
 					int curchannels = wf.NumChannels;
 					int cursr = wf.SR;
 					int curdepth = wf.Depth;
-				//	if(cursr != sr || curchannels != numchannels || depth != curdepth || wf.PCM != pcm)
 					if(cursr != sr || curchannels != numchannels || depth != curdepth)
 					{
 						dumpStats();
@@ -83,55 +93,32 @@ namespace ConsoleApplication1
 			return null;
 		}
 
-		public string GetLongestSample(out int dur)
+		
+		public void Save(string newName, bool createAR, bool createOT, int overhead, bool createLogs)
 		{
-			Wav wf = maxPtr();
-			if(wf != null)
+			if(createAR)
+				AR.Save(newName, this, overhead, createLogs);
+			if(createOT)
+				OT.Save(newName, this, overhead, createLogs);
+		}
+
+		public WavCollection GetSamples(splitter chain)
+		{
+			return GetSamples(chain.chainOffset, chain.chainOffset+chain.chainLen);
+		}
+
+		public WavCollection GetSamples(int from = 0, int to = -1)
+		{
+			if(to < 0)
+				to = waveList.Count;
+
+			List<Wav> sublist = new List<Wav>();
+			for(int k = from; k < to; k++)
 			{
-				dur = wf.Duration;
-				return wf.Name;
+				sublist.Add(new Wav(waveList[k]));
 			}
 
-			dur = 0;
-			return null;
-		}
-
-		public int MaxDuration()
-		{
-			return maxPtr()?.Duration ?? 0;
-		}
-
-		private Wav maxPtr()
-		{
-			Wav rv = null;
-			int curDur = 0;
-			foreach(Wav wf in waveList)
-			{
-				int dur = wf.OrigDuration;
-				if(dur > curDur)
-				{
-					curDur = dur;
-					rv = wf;
-				}
-			}
-
-			return rv;
-		}
-
-		private void roundUp()
-		{
-			int value = MaxDuration();
-			foreach(Wav wf in waveList)
-			{
-				wf.RoundUp(value);
-			}			
-		}
-
-		public void Save(string newName)
-		{
-			roundUp();
-			AR.Save(newName, this);
-			OT.Save(newName, this);
+			return new WavCollection(sublist);
 		}
 	}
 }
